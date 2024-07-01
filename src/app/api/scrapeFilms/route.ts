@@ -10,58 +10,50 @@ async function getParentsGuide(film: Film, browser: Browser): Promise<Film> {
     const searchQuery = `${film["film-name"]} ${film["film-release-year"]} imdb Parents Guide`;
     await page.goto(`https://www.google.com/search?q=${encodeURIComponent(searchQuery)}`);
     
-    const searchResults = await page.$$eval('div.g', (results) => 
-      results.map(result => ({
-        title: result.querySelector('h3')?.textContent || '',
-        link: result.querySelector('a')?.href || ''
-      }))
-    );
-
-    const imdbLink = searchResults.find(result => 
-      result.link.includes('imdb.com') && result.link.includes('parentalguide')
-    )?.link;
+    const searchContent = await page.content();
+    const $search = load(searchContent);
+    
+    const imdbLink = $search('div.g').map((_, el) => {
+      const link = $search(el).find('a').attr('href');
+      return link && link.includes('imdb.com') && link.includes('parentalguide') ? link : null;
+    }).get().find(link => link !== null);
 
     if (!imdbLink) {
       throw new Error('IMDB Parents Guide page not found');
     }
 
-    console.log("LOG: Finished finding IMDB link");
+    console.log(`LOG: Found IMDB link: ${imdbLink}`);
 
     await page.goto(imdbLink);
-    
-    const parentsGuideContent = await page.evaluate(() => {
-      console.log("LOG: Evaluating parents guide content");
+    console.log("LOG: Navigated to IMDB page");
 
-      const frighteningSection = document.querySelector('.advisory-frightening');
-      if (!frighteningSection) return null;
+    const imdbContent = await page.content();
+    console.log("LOG: Loaded IMDB page content: ", imdbContent);
 
-      console.log("LOG: Frightening section found");
+    const $ = load(imdbContent);
 
-      const severityContainer = frighteningSection.querySelector('.advisory-severity-vote__container');
-      if (!severityContainer) return null;
-
-      console.log("LOG: Severity container found");
-
-      const severitySpan = severityContainer.querySelector('span.ipl-status-pill');
-      const severityAnchor = severityContainer.querySelector('a.advisory-severity-vote__message');
-
-      return {
-        severity: severitySpan ? severitySpan.textContent?.trim() : null,
-        votes: severityAnchor ? severityAnchor.textContent?.trim() : null
-      };
-    });
-
-    if (parentsGuideContent) {
-      film.parentsGuide = {
-        severity: parentsGuideContent.severity,
-        votes: parentsGuideContent.votes
-      };
-    } else {
-      film.parentsGuide = {
-        severity: 'Not found',
-        votes: 'Not found'
-      };
+    const frighteningSection = $('#advisory-nudity');
+    if (frighteningSection.length === 0) {
+      console.log("LOG: Frightening section not found");
+      throw new Error('Frightening section not found');
     }
+
+    const severityContainer = frighteningSection.find('.advisory-severity-vote__container');
+    if (severityContainer.length === 0) {
+      console.log("LOG: Severity container not found");
+      throw new Error('Severity container not found');
+    }
+
+    const severitySpan = severityContainer.find('span.ipl-status-pill');
+    const severityAnchor = severityContainer.find('a.advisory-severity-vote__message');
+
+    film.parentsGuide = {
+      severity: severitySpan.text().trim() || 'Not found',
+      votes: severityAnchor.text().trim() || 'Not found'
+    };
+
+    console.log(`LOG: Parents Guide Content: ${JSON.stringify(film.parentsGuide)}`);
+
   } catch (error) {
     console.error(`Error getting Parents Guide for ${film["film-name"]}:`, error);
     film.parentsGuide = {
@@ -73,6 +65,7 @@ async function getParentsGuide(film: Film, browser: Browser): Promise<Film> {
   }
   return film;
 }
+
 
 export async function POST(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== "POST") {
