@@ -78,20 +78,6 @@ export const LetterboxdListPage = () => {
       <Button onClick={handleScrape} disabled={isLoading}>
         {isLoading ? 'Scraping...' : 'Scrape Films'}
       </Button>{' '}
-      <Stack direction="row" spacing={2}>
-        <Chip variant="solid" color="success">
-          None
-        </Chip>
-        <Chip variant="solid" color="primary">
-          Mild
-        </Chip>
-        <Chip variant="solid" color="warning">
-          Moderate
-        </Chip>
-        <Chip variant="solid" color="danger">
-          Severe
-        </Chip>
-      </Stack>
       <Table aria-label="basic table" bgcolor="white">
         <thead>
           <tr>
@@ -102,12 +88,15 @@ export const LetterboxdListPage = () => {
         </thead>
         <tbody>
           {films.map((film, index) => {
-            const severity = film['parentsGuide']['severity'] || 'None';
+            const severity = film['parentsGuide']['severity'];
+
             return (
               <tr key={index}>
-                <td>{film['film-name']} ({film['film-release-year']})</td>
-                <td>{SEVERITY_CHIPS_MAP[severity]}</td>
-                <td>{film.parentsGuide.votes}</td>
+                <td>
+                  {film['film-name']} ({film['film-release-year']})
+                </td>
+                <td>{severity ? SEVERITY_CHIPS_MAP[severity] : 'Not found'}</td>
+                <td>{severity ? film.parentsGuide.votes : 'Not found'}</td>
               </tr>
             );
           })}
