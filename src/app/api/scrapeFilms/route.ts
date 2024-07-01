@@ -37,10 +37,10 @@ async function getParentsGuide(film: Film, browser: Browser): Promise<Film> {
       throw new Error('IMDB Parents Guide page not found');
     }
 
-    console.log(`LOG: Found IMDB link: ${imdbLink}`);
+    console.log(`LOG-${film['film-name']}: Found IMDB link for: ${imdbLink}`);
 
     await page.goto(imdbLink);
-    console.log('LOG: Navigated to IMDB page');
+    // console.log('LOG: Navigated to IMDB page');
 
     const imdbContent = await page.content();
     // console.log("LOG: Loaded IMDB page content: ", imdbContent);
@@ -49,15 +49,15 @@ async function getParentsGuide(film: Film, browser: Browser): Promise<Film> {
 
     const frighteningSection = $('#advisory-nudity');
     if (frighteningSection.length === 0) {
-      console.log('LOG: Frightening section not found');
-      throw new Error('Frightening section not found');
+      console.log(`LOG-${film['film-name']}: N section not found`); 
+      throw new Error('N section not found');
     }
 
     const severityContainer = frighteningSection.find(
       '.advisory-severity-vote__container'
     );
     if (severityContainer.length === 0) {
-      console.log('LOG: Severity container not found');
+      console.log(`LOG-${film['film-name']}: Severity container not found`);
       throw new Error('Severity container not found');
     }
 
@@ -82,8 +82,7 @@ async function getParentsGuide(film: Film, browser: Browser): Promise<Film> {
     );
   } catch (error) {
     console.error(
-      `Error getting Parents Guide for ${film['film-name']}:`,
-      error
+      `Error getting Parents Guide for ${film['film-name']}:`
     );
     film.parentsGuide = {
       severity: null,
@@ -148,8 +147,8 @@ export async function POST(req: any, res: NextApiResponse) {
 
     await browser.close();
 
-    console.log('LOG: Finished scraping films');
-    console.log('LOG: Films scraped: ', processedFilms);
+    console.log('LOG: Finished scraping films: ' + processedFilms.length);
+    // console.log('LOG: Films scraped: ', processedFilms);
 
     return NextResponse.json({ films: processedFilms });
   } catch (error) {
