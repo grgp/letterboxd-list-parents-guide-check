@@ -72,15 +72,19 @@ async function processBatch(films: Film[], browser: Browser): Promise<Film[]> {
   return results;
 }
 
-export async function POST(req: NextApiRequest, res: NextApiResponse) {
+export async function POST(req: any, res: NextApiResponse) {
   if (req.method !== "POST") {
     return res.status(405).json({ message: "Method Not Allowed" });
   }
 
   try {
+    const reqJson = await req.json();
+
+    const listUrl = reqJson.listUrl;
     const browser = await puppeteer.launch();
     const page = await browser.newPage();
-    await page.goto("https://letterboxd.com/grgp/list/to-watch-3-w-descriptions/");
+    await page.goto(listUrl);
+
     const htmlContent = await page.content();
     console.log("LOG: Finished loading letterboxd page");
 
@@ -94,11 +98,12 @@ export async function POST(req: NextApiRequest, res: NextApiResponse) {
         "poster-url": $(element).attr("data-poster-url") || "",
         "film-release-year": $(element).attr("data-film-release-year") || "",
         "film-link": $(element).attr("data-film-link") || "",
+        "parentsGuide": {},
       };
       films.push(film);
     });
 
-    const filmsToProcess = films.slice(0, 30);
+    const filmsToProcess = films.slice(0, 5);
 
     // Process films in batches of 5
     const batchSize = 5;

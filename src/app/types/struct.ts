@@ -4,7 +4,7 @@ export type Film = {
   "poster-url": string;
   "film-release-year": string;
   "film-link": string;
-  "parentsGuide"?: {
+  "parentsGuide": {
     "severity"?: string | null;
     "votes"?: string | null;
   };
