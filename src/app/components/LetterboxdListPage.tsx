@@ -32,7 +32,10 @@ export const LetterboxdListPage = () => {
       {films.length > 0 && (
         <ol>
           {films.map((film, index) => (
-            <li key={index}>{index}. {film['film-name']} ({film['film-release-year']}) -- {film['parentsGuide']}</li>
+            <li key={index}>
+              {index}. {film['film-name']} ({film['film-release-year']}) --{' '}
+              {JSON.stringify(film['parentsGuide'])}
+            </li>
           ))}
         </ol>
       )}

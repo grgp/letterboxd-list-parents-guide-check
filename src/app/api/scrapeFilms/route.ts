@@ -25,16 +25,49 @@ async function getParentsGuide(film: Film, browser: Browser): Promise<Film> {
       throw new Error('IMDB Parents Guide page not found');
     }
 
+    console.log("LOG: Finished finding IMDB link");
+
     await page.goto(imdbLink);
     
-    const parentsGuideContent = await page.$eval('section.article.listo.content-advisories-index', 
-      (element) => element.innerHTML
-    );
+    const parentsGuideContent = await page.evaluate(() => {
+      console.log("LOG: Evaluating parents guide content");
 
-    film.parentsGuide = parentsGuideContent;
+      const frighteningSection = document.querySelector('.advisory-frightening');
+      if (!frighteningSection) return null;
+
+      console.log("LOG: Frightening section found");
+
+      const severityContainer = frighteningSection.querySelector('.advisory-severity-vote__container');
+      if (!severityContainer) return null;
+
+      console.log("LOG: Severity container found");
+
+      const severitySpan = severityContainer.querySelector('span.ipl-status-pill');
+      const severityAnchor = severityContainer.querySelector('a.advisory-severity-vote__message');
+
+      return {
+        severity: severitySpan ? severitySpan.textContent?.trim() : null,
+        votes: severityAnchor ? severityAnchor.textContent?.trim() : null
+      };
+    });
+
+    if (parentsGuideContent) {
+      film.parentsGuide = {
+        severity: parentsGuideContent.severity,
+        votes: parentsGuideContent.votes
+      };
+    } else {
+      film.parentsGuide = {
+        severity: 'Not found',
+        votes: 'Not found'
+      };
+    }
   } catch (error) {
     console.error(`Error getting Parents Guide for ${film["film-name"]}:`, error);
-    film.parentsGuide = 'Error: Unable to retrieve Parents Guide';
+    film.parentsGuide = {
+      severity: 'Error: Unable to retrieve',
+      votes: 'Error: Unable to retrieve'
+    };
   } finally {
     await page.close();
   }
@@ -51,6 +84,7 @@ export async function POST(req: NextApiRequest, res: NextApiResponse) {
     const page = await browser.newPage();
     await page.goto("https://letterboxd.com/grgp/list/to-watch-3-w-descriptions/");
     const htmlContent = await page.content();
+    console.log("LOG: Finished loading letterboxd page");
 
     const $ = load(htmlContent);
     let films: Film[] = [];
