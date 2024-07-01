@@ -28,11 +28,11 @@ async function getParentsGuide(film: Film, browser: Browser): Promise<Film> {
     console.log("LOG: Navigated to IMDB page");
 
     const imdbContent = await page.content();
-    console.log("LOG: Loaded IMDB page content: ", imdbContent);
+    // console.log("LOG: Loaded IMDB page content: ", imdbContent);
 
     const $ = load(imdbContent);
 
-    const frighteningSection = $('#advisory-nudity');
+    const frighteningSection = $('#advisory-frightening');
     if (frighteningSection.length === 0) {
       console.log("LOG: Frightening section not found");
       throw new Error('Frightening section not found');
@@ -66,6 +66,11 @@ async function getParentsGuide(film: Film, browser: Browser): Promise<Film> {
   return film;
 }
 
+async function processBatch(films: Film[], browser: Browser): Promise<Film[]> {
+  const results = await Promise.all(films.map(film => getParentsGuide(film, browser)));
+  await new Promise(resolve => setTimeout(resolve, 3000)); // 3 seconds timeout
+  return results;
+}
 
 export async function POST(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== "POST") {
@@ -93,15 +98,22 @@ export async function POST(req: NextApiRequest, res: NextApiResponse) {
       films.push(film);
     });
 
-    // Process only the first 10 films
-    films = films.slice(0, 3);
+    const filmsToProcess = films.slice(0, 30);
 
-    // Get Parents Guide for each film
-    films = await Promise.all(films.map(film => getParentsGuide(film, browser)));
+    // Process films in batches of 5
+    const batchSize = 5;
+    let processedFilms: Film[] = [];
+
+    for (let i = 0; i < films.length; i += batchSize) {
+      const batch = filmsToProcess.slice(i, i + batchSize);
+      console.log(`LOG: Processing batch ${i / batchSize + 1}`);
+      const batchResults = await processBatch(batch, browser);
+      processedFilms = [...processedFilms, ...batchResults];
+    }
 
     await browser.close();
 
-    return NextResponse.json({ films });
+    return NextResponse.json({ films: processedFilms });
   } catch (error) {
     console.error("Error scraping films:", error);
     return NextResponse.json({ message: "Error scraping films" }, { status: 500 });
