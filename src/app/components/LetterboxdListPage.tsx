@@ -30,11 +30,11 @@ export const LetterboxdListPage = () => {
         {isLoading ? 'Scraping...' : 'Scrape Films'}
       </button>
       {films.length > 0 && (
-        <ul>
+        <ol>
           {films.map((film, index) => (
-            <li key={index}>{film['film-name']} --- {film['film-release-year']}</li>
+            <li key={index}>{index}. {film['film-name']} ({film['film-release-year']}) -- {film['parentsGuide']}</li>
           ))}
-        </ul>
+        </ol>
       )}
     </div>
   );

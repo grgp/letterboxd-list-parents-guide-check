@@ -1,32 +1,61 @@
 import { NextApiRequest, NextApiResponse } from "next";
 import { NextResponse } from "next/server";
-import puppeteer from "puppeteer";
+import puppeteer, { Browser } from "puppeteer";
 import { load } from "cheerio";
 import { Film } from "../../types/struct";
 
+async function getParentsGuide(film: Film, browser: Browser): Promise<Film> {
+  const page = await browser.newPage();
+  try {
+    const searchQuery = `${film["film-name"]} ${film["film-release-year"]} imdb Parents Guide`;
+    await page.goto(`https://www.google.com/search?q=${encodeURIComponent(searchQuery)}`);
+    
+    const searchResults = await page.$$eval('div.g', (results) => 
+      results.map(result => ({
+        title: result.querySelector('h3')?.textContent || '',
+        link: result.querySelector('a')?.href || ''
+      }))
+    );
+
+    const imdbLink = searchResults.find(result => 
+      result.link.includes('imdb.com') && result.link.includes('parentalguide')
+    )?.link;
+
+    if (!imdbLink) {
+      throw new Error('IMDB Parents Guide page not found');
+    }
+
+    await page.goto(imdbLink);
+    
+    const parentsGuideContent = await page.$eval('section.article.listo.content-advisories-index', 
+      (element) => element.innerHTML
+    );
+
+    film.parentsGuide = parentsGuideContent;
+  } catch (error) {
+    console.error(`Error getting Parents Guide for ${film["film-name"]}:`, error);
+    film.parentsGuide = 'Error: Unable to retrieve Parents Guide';
+  } finally {
+    await page.close();
+  }
+  return film;
+}
 
 export async function POST(req: NextApiRequest, res: NextApiResponse) {
-  console.log("Request:", req);
-
   if (req.method !== "POST") {
     return res.status(405).json({ message: "Method Not Allowed" });
   }
 
   try {
-    // console.log("Request:", req);
     const browser = await puppeteer.launch();
     const page = await browser.newPage();
-    await page.goto(
-      "https://letterboxd.com/grgp/list/to-watch-3-w-descriptions/"
-    );
+    await page.goto("https://letterboxd.com/grgp/list/to-watch-3-w-descriptions/");
     const htmlContent = await page.content();
 
-    // console.log("Content:", htmlContent);
-
     const $ = load(htmlContent);
-    const films: Film[] = [];
+    let films: Film[] = [];
 
-    $('div[class^="react-component poster film-poster"]').each((index, element) => {
+    $('div[class*="poster film-poster"]').each((index, element) => {
       const film: Film = {
         "film-id": $(element).attr("data-film-id") || "",
         "film-name": $(element).attr("data-film-name") || "",
@@ -37,7 +66,11 @@ export async function POST(req: NextApiRequest, res: NextApiResponse) {
       films.push(film);
     });
 
-    // console.log("Films:", films);
+    // Process only the first 10 films
+    films = films.slice(0, 3);
+
+    // Get Parents Guide for each film
+    films = await Promise.all(films.map(film => getParentsGuide(film, browser)));
 
     await browser.close();
 
