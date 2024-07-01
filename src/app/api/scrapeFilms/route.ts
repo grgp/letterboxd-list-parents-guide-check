@@ -1,4 +1,4 @@
-import { NextApiRequest, NextApiResponse } from 'next';
+import { NextApiResponse } from 'next';
 import { NextResponse } from 'next/server';
 import puppeteer, { Browser } from 'puppeteer';
 import { load } from 'cheerio';
@@ -49,7 +49,7 @@ async function getParentsGuide(film: Film, browser: Browser): Promise<Film> {
 
     const frighteningSection = $('#advisory-nudity');
     if (frighteningSection.length === 0) {
-      console.log(`LOG-${film['film-name']}: N section not found`); 
+      console.log(`LOG-${film['film-name']}: N section not found`);
       throw new Error('N section not found');
     }
 
@@ -81,9 +81,7 @@ async function getParentsGuide(film: Film, browser: Browser): Promise<Film> {
       `LOG: Parents Guide Content: ${JSON.stringify(film.parentsGuide)}`
     );
   } catch (error) {
-    console.error(
-      `Error getting Parents Guide for ${film['film-name']}:`
-    );
+    console.error(`Error getting Parents Guide for ${film['film-name']}:`);
     film.parentsGuide = {
       severity: null,
       votes: null,
@@ -100,6 +98,13 @@ async function processBatch(films: Film[], browser: Browser): Promise<Film[]> {
   );
   await new Promise((resolve) => setTimeout(resolve, FETCH_BATCH_INTERVAL));
   return results;
+}
+
+async function dummyProcessBatch(
+  films: Film[],
+  browser: Browser
+): Promise<Film[]> {
+  return films;
 }
 
 export async function POST(req: any, res: NextApiResponse) {
@@ -122,16 +127,27 @@ export async function POST(req: any, res: NextApiResponse) {
     let films: Film[] = [];
 
     $('div[class*="poster film-poster"]').each((index, element) => {
-      const film: Film = {
-        'film-id': $(element).attr('data-film-id') || '',
-        'film-name': $(element).attr('data-film-name') || '',
-        'poster-url': $(element).attr('data-poster-url') || '',
-        'film-release-year': $(element).attr('data-film-release-year') || '',
-        'film-link': $(element).attr('data-film-link') || '',
-        parentsGuide: {},
-      };
-      films.push(film);
+      let filmName = $(element).attr('data-film-name');
+
+      if (!filmName) {
+        filmName = $(element).attr('data-film-slug')?.split('-').join(' ');
+      }
+
+      if (filmName) {
+        const film: Film = {
+          'film-id': $(element).attr('data-film-id') || '',
+          'film-name': filmName || '',
+          'poster-url': $(element).attr('data-poster-url') || '',
+          'film-release-year': $(element).attr('data-film-release-year') || '',
+          'film-link': $(element).attr('data-film-link') || '',
+          parentsGuide: {},
+        };
+
+        films.push(film);
+      }
     });
+
+    console.log('LOG: Films scraped: ', films);
 
     const filmsToProcess = films.slice(0, NUM_OF_FILMS_TO_FETCH);
 
