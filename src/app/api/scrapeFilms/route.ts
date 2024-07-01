@@ -50,11 +50,6 @@ export async function POST(req: NextApiRequest, res: NextApiResponse) {
 
     console.log('Films:', films);
 
-    $('.poster-container').each((_, element) => {
-      const title = $(element).find('.frame-title').text();
-      films.push(title);
-    });
-
     await browser.close();
 
     res.status(200).json({ films });
