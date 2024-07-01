@@ -1,15 +1,21 @@
-"use client";
+'use client';
+
 import React, { useState } from 'react';
+import { Film } from '../types/struct';
 
 export const LetterboxdListPage = () => {
-  const [films, setFilms] = useState<string[]>([]);
+  const [films, setFilms] = useState<Film[]>([]);
   const [isLoading, setIsLoading] = useState(false);
 
   const handleScrape = async () => {
     setIsLoading(true);
     try {
-      const response = await fetch('/api/scrapeFilms', { method: 'POST' });
-      const data = await response.json();
+      const response = await fetch('/api/scrapeFilms', {
+        method: 'POST',
+      });
+
+      const data = (await response.json()) as { films: Film[] };
+
       setFilms(data.films);
     } catch (error) {
       console.error('Error fetching films:', error);
@@ -26,7 +32,7 @@ export const LetterboxdListPage = () => {
       {films.length > 0 && (
         <ul>
           {films.map((film, index) => (
-            <li key={index}>{film}</li>
+            <li key={index}>{film['film-name']} --- {film['film-release-year']}</li>
           ))}
         </ul>
       )}
