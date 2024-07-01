@@ -8,6 +8,9 @@ import Button from '@mui/joy/Button/Button';
 
 import { Film } from '../types/struct';
 import Typography from '@mui/joy/Typography/Typography';
+import List from '@mui/joy/List/List';
+import ListItem from '@mui/joy/ListItem/ListItem';
+import Table from '@mui/joy/Table/Table';
 
 const DEFAULT_LIST_URL =
   'https://letterboxd.com/grgp/list/to-watch-3-w-descriptions/';
@@ -89,21 +92,27 @@ export const LetterboxdListPage = () => {
           Severe
         </Chip>
       </Stack>
-      {films.length > 0 && (
-        <ol>
+      <Table aria-label="basic table" bgcolor="white">
+        <thead>
+          <tr>
+            <th>Film</th>
+            <th>Severity</th>
+            <th>Votes</th>
+          </tr>
+        </thead>
+        <tbody>
           {films.map((film, index) => {
             const severity = film['parentsGuide']['severity'] || 'None';
-
             return (
-              <li key={index}>
-                {index}. {film['film-name']} ({film['film-release-year']}) --{' '}
-                {SEVERITY_CHIPS_MAP[severity]}
-                {` (${film.parentsGuide.votes})`}
-              </li>
+              <tr key={index}>
+                <td>{film['film-name']} ({film['film-release-year']})</td>
+                <td>{SEVERITY_CHIPS_MAP[severity]}</td>
+                <td>{film.parentsGuide.votes}</td>
+              </tr>
             );
           })}
-        </ol>
-      )}
+        </tbody>
+      </Table>
     </Stack>
   );
 };

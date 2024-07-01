@@ -109,7 +109,7 @@ export async function POST(req: any, res: NextApiResponse) {
     const batchSize = 5;
     let processedFilms: Film[] = [];
 
-    for (let i = 0; i < films.length; i += batchSize) {
+    for (let i = 0; i < filmsToProcess.length; i += batchSize) {
       const batch = filmsToProcess.slice(i, i + batchSize);
       console.log(`LOG: Processing batch ${i / batchSize + 1}`);
       const batchResults = await processBatch(batch, browser);
