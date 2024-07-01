@@ -66,9 +66,15 @@ async function getParentsGuide(film: Film, browser: Browser): Promise<Film> {
       'a.advisory-severity-vote__message'
     );
 
+    let severityText = severitySpan.text().trim() || 'None';
+    const votesText = severityAnchor.text().trim();
+    if (!votesText && severityText === 'None') {
+      severityText = 'NoData';
+    }
+
     film.parentsGuide = {
-      severity: severitySpan.text().trim() || 'None',
-      votes: severityAnchor.text().trim() || 'None',
+      severity: severityText,
+      votes: votesText,
     };
 
     console.log(

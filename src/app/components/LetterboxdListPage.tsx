@@ -16,6 +16,11 @@ const DEFAULT_LIST_URL =
   'https://letterboxd.com/grgp/list/to-watch-3-w-descriptions/';
 
 const SEVERITY_CHIPS_MAP: Record<string, JSX.Element> = {
+  'NoData': (
+    <Chip variant="solid">
+      No Data
+    </Chip>
+  ),
   None: (
     <Chip variant="solid" color="success">
       None
