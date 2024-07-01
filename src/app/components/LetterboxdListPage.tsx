@@ -16,11 +16,7 @@ const DEFAULT_LIST_URL =
   'https://letterboxd.com/grgp/list/to-watch-3-w-descriptions/';
 
 const SEVERITY_CHIPS_MAP: Record<string, JSX.Element> = {
-  'NoData': (
-    <Chip variant="solid">
-      No Data
-    </Chip>
-  ),
+  NoData: <Chip variant="solid">No Data</Chip>,
   None: (
     <Chip variant="solid" color="success">
       None
@@ -71,7 +67,7 @@ export const LetterboxdListPage = () => {
   };
 
   return (
-    <Stack padding={8} spacing={4}>
+    <Stack padding={8} spacing={4} maxWidth="1080px" margin="0 auto">
       <Typography level="h2">
         Is your Letterboxd list safe to watch in the living room
       </Typography>
@@ -87,8 +83,8 @@ export const LetterboxdListPage = () => {
         <thead>
           <tr>
             <th>Film</th>
-            <th>Severity</th>
-            <th>Votes</th>
+            <th style={{ width: '160px' }}>Severity</th>
+            <th style={{ maxWidth: '320px' }}>Votes</th>
           </tr>
         </thead>
         <tbody>
