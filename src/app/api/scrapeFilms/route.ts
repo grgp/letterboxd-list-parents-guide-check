@@ -13,6 +13,7 @@ import {
   FilmDbRecord,
   filmToDbRecord,
   insertFilmQuery,
+  updateFilmQuery,
 } from '../../lib/dbHelpers';
 
 async function getParentsGuide(
@@ -106,40 +107,54 @@ async function dummyProcessBatch(
   return films;
 }
 
-async function getFilmsNotInDb(films: FilmDbRecord[]): Promise<FilmDbRecord[]> {
-  const db = await getDb();
-  const filmsNotInDb: FilmDbRecord[] = [];
-
-  for (const film of films) {
-    const existingFilm = await db.get(
-      'SELECT * FROM films WHERE letterboxd_film_id = ?',
-      film.letterboxd_film_id
-    );
-
-    if (!existingFilm) {
-      filmsNotInDb.push(film);
-    } else {
-      console.log(`Film ${film.film_name} already exists in the database. Updating data anyway.`);
-    }
-  }
-
-  return filmsNotInDb;
-}
-
 async function fetchAndSaveParentsGuide(
   films: FilmDbRecord[],
   browser: Browser
 ): Promise<FilmDbRecord[]> {
   const db = await getDb();
-  const updatedFilms = await Promise.all(
-    films.map((film) => getParentsGuide(film, browser))
+
+  // Separate films that need parents guide fetching and those that don't
+  const [filmsToFetch, filmsToNotFetch] = await Promise.all([
+    Promise.all(
+      films.filter(async (film) => {
+        const existingFilm = await db.get(
+          'SELECT * FROM films WHERE letterboxd_film_id = ?',
+          film.letterboxd_film_id
+        );
+        return !existingFilm;
+      })
+    ),
+    Promise.all(
+      films.filter(async (film) => {
+        const existingFilm = await db.get(
+          'SELECT * FROM films WHERE letterboxd_film_id = ?',
+          film.letterboxd_film_id
+        );
+        return !!existingFilm;
+      })
+    ),
+  ]);
+
+  // Fetch parents guide for new films
+  const filmsWithParentsGuide = await Promise.all(
+    filmsToFetch.map((film) => getParentsGuide(film, browser))
   );
 
-  for (const film of updatedFilms) {
+  // Insert new films
+  for (const film of filmsWithParentsGuide) {
     const dbRecord = filmToDbRecord(film);
     const { sql, params } = insertFilmQuery(dbRecord);
     await db.run(sql, params);
   }
+
+  // Update existing films
+  for (const film of filmsToNotFetch) {
+    const { sql, params } = updateFilmQuery(film);
+    await db.run(sql, params);
+  }
+
+  // Combine all films
+  const updatedFilms = [...filmsWithParentsGuide, ...filmsToNotFetch];
 
   return updatedFilms;
 }
@@ -150,14 +165,7 @@ async function processBatch(
 ): Promise<FilmDbRecord[]> {
   const db = await getDb();
 
-  // Step 1: Get films not in the database
-  const filmsToFetch = await getFilmsNotInDb(films);
-
-  // Step 2: Fetch and save parents guide for new films
-  await fetchAndSaveParentsGuide(
-    filmsToFetch,
-    browser
-  );
+  await fetchAndSaveParentsGuide(films, browser);
 
   // Get all films (including those that were already in the database)
   const allFilms = await Promise.all(

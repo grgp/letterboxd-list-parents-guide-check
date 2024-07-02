@@ -33,3 +33,21 @@ export function insertFilmQuery(film: FilmDbRecord): {
 
   return { sql, params };
 }
+
+// New helper function for update query
+export function updateFilmQuery(
+  film: Record<string, string> /* Partial<FilmDbRecord> */
+): {
+  sql: string;
+  params: (string | null)[];
+} {
+  const fields = ['film_name', 'poster_url', 'film_release_year', 'film_link'];
+  const updateFields = fields.map((field) => `${field} = ?`).join(', ');
+  const sql = `UPDATE films SET ${updateFields} WHERE letterboxd_film_id = ?`;
+  const params = [
+    ...fields.map((field) => film[field] ?? null),
+    film.letterboxd_film_id,
+  ];
+
+  return { sql, params };
+}
