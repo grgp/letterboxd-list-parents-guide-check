@@ -94,7 +94,7 @@ export const LetterboxdListPage = () => {
             return (
               <tr key={index}>
                 <td>
-                  {film['film-name']} ({film['film-release-year']})
+                  {film['film-name']} ({film['film-release-year']} {JSON.stringify(film)})
                 </td>
                 <td>{severity ? SEVERITY_CHIPS_MAP[severity] : 'Not found'}</td>
                 <td>{severity ? film.parentsGuide.votes : 'Not found'}</td>

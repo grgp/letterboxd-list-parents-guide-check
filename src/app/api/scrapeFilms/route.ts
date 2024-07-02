@@ -80,7 +80,9 @@ async function getParentsGuide(film: Film, browser: Browser): Promise<Film> {
     };
 
     console.log(
-      `LOG: Parents Guide Content: ${JSON.stringify(film.parentsGuide)}`
+      `LOG: Parents Guide Content ${film['film-name']}: ${JSON.stringify(
+        film.parentsGuide
+      )}`
     );
   } catch (error) {
     console.error(`Error getting Parents Guide for ${film['film-name']}:`);
@@ -101,39 +103,75 @@ async function dummyProcessBatch(
   return films;
 }
 
-async function processBatch(films: Film[], browser: Browser): Promise<Film[]> {
+async function getFilmsNotInDb(films: Film[]): Promise<Film[]> {
   const db = await getDb();
-  const results = await Promise.all(
-    films.map(async (film) => {
-      // Check if the film exists in the database
-      const existingFilm = await db.get('SELECT * FROM films WHERE letterboxd_film_id = ?', film['letterboxd-film-id']);
-      
-      if (existingFilm) {
-        console.log(`Film ${film['film-name']} already exists in the database.`);
-        return {
-          ...existingFilm,
-          parentsGuide: {
-            severity: existingFilm.parents_guide_severity,
-            votes: existingFilm.parents_guide_votes,
-          },
-        };
-      }
-      
-      // If the film doesn't exist, fetch the parents guide and save to the database
-      const updatedFilm = await getParentsGuide(film, browser);
-      
-      const dbRecord = filmToDbRecord(updatedFilm);
-      const { sql, params } = insertFilmQuery(dbRecord);
-      
-      await db.run(sql, params);
-      
-      return updatedFilm;
-    })
-  );
-  await new Promise((resolve) => setTimeout(resolve, FETCH_BATCH_INTERVAL));
-  return results;
+  const filmsNotInDb: Film[] = [];
+
+  for (const film of films) {
+    const existingFilm = await db.get(
+      'SELECT * FROM films WHERE letterboxd_film_id = ?',
+      film['letterboxd-film-id']
+    );
+    if (!existingFilm) {
+      filmsNotInDb.push(film);
+    } else {
+      console.log(`Film ${film['film-name']} already exists in the database.`);
+    }
+  }
+
+  return filmsNotInDb;
 }
 
+async function fetchAndSaveParentsGuide(
+  films: Film[],
+  browser: Browser
+): Promise<Film[]> {
+  const db = await getDb();
+  const updatedFilms = await Promise.all(
+    films.map((film) => getParentsGuide(film, browser))
+  );
+
+  for (const film of updatedFilms) {
+    const dbRecord = filmToDbRecord(film);
+    const { sql, params } = insertFilmQuery(dbRecord);
+    await db.run(sql, params);
+  }
+
+  return updatedFilms;
+}
+
+async function processBatch(films: Film[], browser: Browser): Promise<Film[]> {
+  const db = await getDb();
+
+  // Step 1: Get films not in the database
+  const filmsToFetch = await getFilmsNotInDb(films);
+
+  // Step 2: Fetch and save parents guide for new films
+  const _newlyFetchedFilms = await fetchAndSaveParentsGuide(
+    filmsToFetch,
+    browser
+  );
+
+  // Get all films (including those that were already in the database)
+  const allFilms = await Promise.all(
+    films.map(async (film) => {
+      const dbFilm = await db.get(
+        'SELECT * FROM films WHERE letterboxd_film_id = ?',
+        film['letterboxd-film-id']
+      );
+      return {
+        ...dbFilm,
+        parentsGuide: {
+          severity: dbFilm.parents_guide_severity,
+          votes: dbFilm.parents_guide_votes,
+        },
+      };
+    })
+  );
+
+  await new Promise((resolve) => setTimeout(resolve, FETCH_BATCH_INTERVAL));
+  return allFilms;
+}
 export async function POST(req: any, res: NextApiResponse) {
   if (req.method !== 'POST') {
     return res.status(405).json({ message: 'Method Not Allowed' });
