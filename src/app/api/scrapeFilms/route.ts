@@ -1,6 +1,6 @@
 import { NextApiResponse } from 'next';
 import { NextResponse } from 'next/server';
-import puppeteer, { Browser } from 'puppeteer';
+import puppeteer, { Browser, Page } from 'puppeteer';
 import { load } from 'cheerio';
 
 import {
@@ -87,8 +87,7 @@ async function getParentsGuide(
       `LOG: Parents Guide Content ${film['film_name']}: ${JSON.stringify({
         severityText,
         votesText,
-      }
-      )}`
+      })}`
     );
   } catch (error) {
     console.error(`Error getting Parents Guide for ${film['film_name']}:`);
@@ -116,10 +115,11 @@ async function getFilmsNotInDb(films: FilmDbRecord[]): Promise<FilmDbRecord[]> {
       'SELECT * FROM films WHERE letterboxd_film_id = ?',
       film.letterboxd_film_id
     );
+
     if (!existingFilm) {
       filmsNotInDb.push(film);
     } else {
-      console.log(`Film ${film.film_name} already exists in the database.`);
+      console.log(`Film ${film.film_name} already exists in the database. Updating data anyway.`);
     }
   }
 
@@ -144,14 +144,17 @@ async function fetchAndSaveParentsGuide(
   return updatedFilms;
 }
 
-async function processBatch(films: FilmDbRecord[], browser: Browser): Promise<FilmDbRecord[]> {
+async function processBatch(
+  films: FilmDbRecord[],
+  browser: Browser
+): Promise<FilmDbRecord[]> {
   const db = await getDb();
 
   // Step 1: Get films not in the database
   const filmsToFetch = await getFilmsNotInDb(films);
 
   // Step 2: Fetch and save parents guide for new films
-  const _newlyFetchedFilms = await fetchAndSaveParentsGuide(
+  await fetchAndSaveParentsGuide(
     filmsToFetch,
     browser
   );
@@ -163,6 +166,7 @@ async function processBatch(films: FilmDbRecord[], browser: Browser): Promise<Fi
         'SELECT * FROM films WHERE letterboxd_film_id = ?',
         film.letterboxd_film_id
       );
+
       return {
         ...dbFilm,
         parentsGuide: {
@@ -176,6 +180,26 @@ async function processBatch(films: FilmDbRecord[], browser: Browser): Promise<Fi
   await new Promise((resolve) => setTimeout(resolve, FETCH_BATCH_INTERVAL));
   return allFilms;
 }
+
+async function autoScroll(page: Page) {
+  await page.evaluate(async () => {
+    await new Promise<void>((resolve) => {
+      let totalHeight = 0;
+      const distance = 100;
+      const timer = setInterval(() => {
+        const scrollHeight = document.body.scrollHeight;
+        window.scrollBy(0, distance);
+        totalHeight += distance;
+
+        if (totalHeight >= scrollHeight) {
+          clearInterval(timer);
+          resolve();
+        }
+      }, 100);
+    });
+  });
+}
+
 export async function POST(req: any, res: NextApiResponse) {
   if (req.method !== 'POST') {
     return res.status(405).json({ message: 'Method Not Allowed' });
@@ -186,7 +210,14 @@ export async function POST(req: any, res: NextApiResponse) {
     const listUrl = reqJson.listUrl;
     const browser = await puppeteer.launch();
     const page = await browser.newPage();
-    await page.goto(listUrl);
+    await page.goto(listUrl, { waitUntil: 'networkidle0' });
+
+    console.log('LOG: Starting to scroll through the page');
+    await autoScroll(page);
+    console.log('LOG: Finished scrolling through the page');
+
+    // Wait for a short time to ensure all lazy-loaded content is rendered
+    new Promise((resolve) => setTimeout(resolve, 2000));
 
     const htmlContent = await page.content();
     console.log('LOG: Finished loading letterboxd page');
@@ -194,7 +225,7 @@ export async function POST(req: any, res: NextApiResponse) {
     const $ = load(htmlContent);
     let films: FilmDbRecord[] = [];
 
-    $('div[class*="poster film-poster"]').each((index, element) => {
+    $('div[class*="film-poster"]').each((index, element) => {
       let filmName = $(element).attr('data-film-name');
 
       if (!filmName) {
@@ -216,6 +247,9 @@ export async function POST(req: any, res: NextApiResponse) {
       }
     });
 
+    console.log(`LOG: Scraped ${films.length} films`);
+
+    await browser.close();
     console.log('LOG: Films scraped: ', films);
 
     const filmsToProcess = films.slice(0, NUM_OF_FILMS_TO_FETCH);
