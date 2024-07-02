@@ -9,6 +9,8 @@ import {
   NUM_OF_FILMS_TO_FETCH,
 } from '../../constants';
 import { Film } from '../../types/struct';
+import { getDb } from '../../lib/db';
+import { filmToDbRecord, insertFilmQuery } from '../../lib/dbHelpers';
 
 async function getParentsGuide(film: Film, browser: Browser): Promise<Film> {
   const page = await browser.newPage();
@@ -92,19 +94,44 @@ async function getParentsGuide(film: Film, browser: Browser): Promise<Film> {
   return film;
 }
 
-async function processBatch(films: Film[], browser: Browser): Promise<Film[]> {
-  const results = await Promise.all(
-    films.map((film) => getParentsGuide(film, browser))
-  );
-  await new Promise((resolve) => setTimeout(resolve, FETCH_BATCH_INTERVAL));
-  return results;
-}
-
 async function dummyProcessBatch(
   films: Film[],
   browser: Browser
 ): Promise<Film[]> {
   return films;
+}
+
+async function processBatch(films: Film[], browser: Browser): Promise<Film[]> {
+  const db = await getDb();
+  const results = await Promise.all(
+    films.map(async (film) => {
+      // Check if the film exists in the database
+      const existingFilm = await db.get('SELECT * FROM films WHERE letterboxd_film_id = ?', film['letterboxd-film-id']);
+      
+      if (existingFilm) {
+        console.log(`Film ${film['film-name']} already exists in the database.`);
+        return {
+          ...existingFilm,
+          parentsGuide: {
+            severity: existingFilm.parents_guide_severity,
+            votes: existingFilm.parents_guide_votes,
+          },
+        };
+      }
+      
+      // If the film doesn't exist, fetch the parents guide and save to the database
+      const updatedFilm = await getParentsGuide(film, browser);
+      
+      const dbRecord = filmToDbRecord(updatedFilm);
+      const { sql, params } = insertFilmQuery(dbRecord);
+      
+      await db.run(sql, params);
+      
+      return updatedFilm;
+    })
+  );
+  await new Promise((resolve) => setTimeout(resolve, FETCH_BATCH_INTERVAL));
+  return results;
 }
 
 export async function POST(req: any, res: NextApiResponse) {
@@ -114,7 +141,6 @@ export async function POST(req: any, res: NextApiResponse) {
 
   try {
     const reqJson = await req.json();
-
     const listUrl = reqJson.listUrl;
     const browser = await puppeteer.launch();
     const page = await browser.newPage();
@@ -135,7 +161,7 @@ export async function POST(req: any, res: NextApiResponse) {
 
       if (filmName) {
         const film: Film = {
-          'film-id': $(element).attr('data-film-id') || '',
+          'letterboxd-film-id': $(element).attr('data-film-id') || '',
           'film-name': filmName || '',
           'poster-url': $(element).attr('data-poster-url') || '',
           'film-release-year': $(element).attr('data-film-release-year') || '',
@@ -164,7 +190,6 @@ export async function POST(req: any, res: NextApiResponse) {
     await browser.close();
 
     console.log('LOG: Finished scraping films: ' + processedFilms.length);
-    // console.log('LOG: Films scraped: ', processedFilms);
 
     return NextResponse.json({ films: processedFilms });
   } catch (error) {
