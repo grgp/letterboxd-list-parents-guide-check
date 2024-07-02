@@ -6,11 +6,11 @@ import Stack from '@mui/joy/Stack/Stack';
 import Input from '@mui/joy/Input/Input';
 import Button from '@mui/joy/Button/Button';
 
-import { Film } from '../types/struct';
 import Typography from '@mui/joy/Typography/Typography';
 import List from '@mui/joy/List/List';
 import ListItem from '@mui/joy/ListItem/ListItem';
 import Table from '@mui/joy/Table/Table';
+import { FilmDbRecord } from '../lib/dbHelpers';
 
 const DEFAULT_LIST_URL =
   'https://letterboxd.com/grgp/list/to-watch-3-w-descriptions/';
@@ -41,7 +41,7 @@ const SEVERITY_CHIPS_MAP: Record<string, JSX.Element> = {
 
 export const LetterboxdListPage = () => {
   const [listUrl, setListUrl] = useState<string>(DEFAULT_LIST_URL);
-  const [films, setFilms] = useState<Film[]>([]);
+  const [films, setFilms] = useState<FilmDbRecord[]>([]);
   const [isLoading, setIsLoading] = useState(false);
 
   const handleScrape = async () => {
@@ -56,7 +56,7 @@ export const LetterboxdListPage = () => {
         body: JSON.stringify({ listUrl }),
       });
 
-      const data = (await response.json()) as { films: Film[] };
+      const data = (await response.json()) as { films: FilmDbRecord[] };
 
       setFilms(data.films);
     } catch (error) {
@@ -89,15 +89,15 @@ export const LetterboxdListPage = () => {
         </thead>
         <tbody>
           {films.map((film, index) => {
-            const severity = film['parentsGuide']['severity'];
+            const severity = film.parents_guide_severity;
 
             return (
               <tr key={index}>
                 <td>
-                  {film['film-name']} ({film['film-release-year']} {JSON.stringify(film)})
+                  {film.film_name} ({film.film_release_year})
                 </td>
                 <td>{severity ? SEVERITY_CHIPS_MAP[severity] : 'Not found'}</td>
-                <td>{severity ? film.parentsGuide.votes : 'Not found'}</td>
+                <td>{severity ? film.parents_guide_votes : 'Not found'}</td>
               </tr>
             );
           })}

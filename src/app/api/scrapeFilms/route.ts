@@ -8,14 +8,20 @@ import {
   FETCH_BATCH_SIZE,
   NUM_OF_FILMS_TO_FETCH,
 } from '../../constants';
-import { Film } from '../../types/struct';
 import { getDb } from '../../lib/db';
-import { filmToDbRecord, insertFilmQuery } from '../../lib/dbHelpers';
+import {
+  FilmDbRecord,
+  filmToDbRecord,
+  insertFilmQuery,
+} from '../../lib/dbHelpers';
 
-async function getParentsGuide(film: Film, browser: Browser): Promise<Film> {
+async function getParentsGuide(
+  film: FilmDbRecord,
+  browser: Browser
+): Promise<FilmDbRecord> {
   const page = await browser.newPage();
   try {
-    const searchQuery = `${film['film-name']} ${film['film-release-year']} imdb Parents Guide`;
+    const searchQuery = `${film['film_name']} ${film.film_release_year} imdb Parents Guide`;
     await page.goto(
       `https://www.google.com/search?q=${encodeURIComponent(searchQuery)}`
     );
@@ -39,7 +45,7 @@ async function getParentsGuide(film: Film, browser: Browser): Promise<Film> {
       throw new Error('IMDB Parents Guide page not found');
     }
 
-    console.log(`LOG-${film['film-name']}: Found IMDB link for: ${imdbLink}`);
+    console.log(`LOG-${film['film_name']}: Found IMDB link for: ${imdbLink}`);
 
     await page.goto(imdbLink);
     // console.log('LOG: Navigated to IMDB page');
@@ -51,7 +57,7 @@ async function getParentsGuide(film: Film, browser: Browser): Promise<Film> {
 
     const frighteningSection = $('#advisory-nudity');
     if (frighteningSection.length === 0) {
-      console.log(`LOG-${film['film-name']}: N section not found`);
+      console.log(`LOG-${film['film_name']}: N section not found`);
       throw new Error('N section not found');
     }
 
@@ -59,7 +65,7 @@ async function getParentsGuide(film: Film, browser: Browser): Promise<Film> {
       '.advisory-severity-vote__container'
     );
     if (severityContainer.length === 0) {
-      console.log(`LOG-${film['film-name']}: Severity container not found`);
+      console.log(`LOG-${film['film_name']}: Severity container not found`);
       throw new Error('Severity container not found');
     }
 
@@ -74,22 +80,20 @@ async function getParentsGuide(film: Film, browser: Browser): Promise<Film> {
       severityText = 'NoData';
     }
 
-    film.parentsGuide = {
-      severity: severityText,
-      votes: votesText,
-    };
+    film.parents_guide_severity = severityText;
+    film.parents_guide_votes = votesText;
 
     console.log(
-      `LOG: Parents Guide Content ${film['film-name']}: ${JSON.stringify(
-        film.parentsGuide
+      `LOG: Parents Guide Content ${film['film_name']}: ${JSON.stringify({
+        severityText,
+        votesText,
+      }
       )}`
     );
   } catch (error) {
-    console.error(`Error getting Parents Guide for ${film['film-name']}:`);
-    film.parentsGuide = {
-      severity: null,
-      votes: null,
-    };
+    console.error(`Error getting Parents Guide for ${film['film_name']}:`);
+    film.parents_guide_severity = null;
+    film.parents_guide_votes = null;
   } finally {
     await page.close();
   }
@@ -97,25 +101,25 @@ async function getParentsGuide(film: Film, browser: Browser): Promise<Film> {
 }
 
 async function dummyProcessBatch(
-  films: Film[],
+  films: FilmDbRecord[],
   browser: Browser
-): Promise<Film[]> {
+): Promise<FilmDbRecord[]> {
   return films;
 }
 
-async function getFilmsNotInDb(films: Film[]): Promise<Film[]> {
+async function getFilmsNotInDb(films: FilmDbRecord[]): Promise<FilmDbRecord[]> {
   const db = await getDb();
-  const filmsNotInDb: Film[] = [];
+  const filmsNotInDb: FilmDbRecord[] = [];
 
   for (const film of films) {
     const existingFilm = await db.get(
       'SELECT * FROM films WHERE letterboxd_film_id = ?',
-      film['letterboxd-film-id']
+      film.letterboxd_film_id
     );
     if (!existingFilm) {
       filmsNotInDb.push(film);
     } else {
-      console.log(`Film ${film['film-name']} already exists in the database.`);
+      console.log(`Film ${film.film_name} already exists in the database.`);
     }
   }
 
@@ -123,9 +127,9 @@ async function getFilmsNotInDb(films: Film[]): Promise<Film[]> {
 }
 
 async function fetchAndSaveParentsGuide(
-  films: Film[],
+  films: FilmDbRecord[],
   browser: Browser
-): Promise<Film[]> {
+): Promise<FilmDbRecord[]> {
   const db = await getDb();
   const updatedFilms = await Promise.all(
     films.map((film) => getParentsGuide(film, browser))
@@ -140,7 +144,7 @@ async function fetchAndSaveParentsGuide(
   return updatedFilms;
 }
 
-async function processBatch(films: Film[], browser: Browser): Promise<Film[]> {
+async function processBatch(films: FilmDbRecord[], browser: Browser): Promise<FilmDbRecord[]> {
   const db = await getDb();
 
   // Step 1: Get films not in the database
@@ -157,7 +161,7 @@ async function processBatch(films: Film[], browser: Browser): Promise<Film[]> {
     films.map(async (film) => {
       const dbFilm = await db.get(
         'SELECT * FROM films WHERE letterboxd_film_id = ?',
-        film['letterboxd-film-id']
+        film.letterboxd_film_id
       );
       return {
         ...dbFilm,
@@ -188,7 +192,7 @@ export async function POST(req: any, res: NextApiResponse) {
     console.log('LOG: Finished loading letterboxd page');
 
     const $ = load(htmlContent);
-    let films: Film[] = [];
+    let films: FilmDbRecord[] = [];
 
     $('div[class*="poster film-poster"]').each((index, element) => {
       let filmName = $(element).attr('data-film-name');
@@ -198,13 +202,14 @@ export async function POST(req: any, res: NextApiResponse) {
       }
 
       if (filmName) {
-        const film: Film = {
-          'letterboxd-film-id': $(element).attr('data-film-id') || '',
-          'film-name': filmName || '',
-          'poster-url': $(element).attr('data-poster-url') || '',
-          'film-release-year': $(element).attr('data-film-release-year') || '',
-          'film-link': $(element).attr('data-film-link') || '',
-          parentsGuide: {},
+        const film: FilmDbRecord = {
+          letterboxd_film_id: $(element).attr('data-film-id') || '',
+          film_name: filmName || '',
+          poster_url: $(element).attr('data-poster-url') || '',
+          film_release_year: $(element).attr('data-film-release-year') || '',
+          film_link: $(element).attr('data-film-link') || '',
+          parents_guide_severity: null,
+          parents_guide_votes: null,
         };
 
         films.push(film);
@@ -216,7 +221,7 @@ export async function POST(req: any, res: NextApiResponse) {
     const filmsToProcess = films.slice(0, NUM_OF_FILMS_TO_FETCH);
 
     const batchSize = FETCH_BATCH_SIZE;
-    let processedFilms: Film[] = [];
+    let processedFilms: FilmDbRecord[] = [];
 
     for (let i = 0; i < filmsToProcess.length; i += batchSize) {
       const batch = filmsToProcess.slice(i, i + batchSize);

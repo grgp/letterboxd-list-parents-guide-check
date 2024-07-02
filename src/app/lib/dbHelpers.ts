@@ -1,6 +1,4 @@
-import { Film } from '../types/struct';
-
-type FilmDbRecord = {
+export type FilmDbRecord = {
   letterboxd_film_id: string;
   film_name: string;
   poster_url: string;
@@ -10,15 +8,15 @@ type FilmDbRecord = {
   parents_guide_votes: string | null;
 };
 
-export function filmToDbRecord(film: Film): FilmDbRecord {
+export function filmToDbRecord(film: FilmDbRecord): FilmDbRecord {
   return {
-    letterboxd_film_id: film['letterboxd-film-id'],
-    film_name: film['film-name'],
-    poster_url: film['poster-url'],
-    film_release_year: film['film-release-year'],
-    film_link: film['film-link'],
-    parents_guide_severity: film.parentsGuide.severity || null,
-    parents_guide_votes: film.parentsGuide.votes || null,
+    letterboxd_film_id: film.letterboxd_film_id,
+    film_name: film.film_name,
+    poster_url: film.poster_url,
+    film_release_year: film.film_release_year,
+    film_link: film.film_link,
+    parents_guide_severity: film.parents_guide_severity || null,
+    parents_guide_votes: film.parents_guide_votes || null,
   };
 }
 
