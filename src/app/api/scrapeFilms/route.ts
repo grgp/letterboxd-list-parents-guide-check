@@ -114,26 +114,31 @@ async function fetchAndSaveParentsGuide(
   const db = await getDb();
 
   // Separate films that need parents guide fetching and those that don't
-  const [filmsToFetch, filmsToNotFetch] = await Promise.all([
-    Promise.all(
-      films.filter(async (film) => {
-        const existingFilm = await db.get(
-          'SELECT * FROM films WHERE letterboxd_film_id = ?',
-          film.letterboxd_film_id
-        );
-        return !existingFilm;
-      })
-    ),
-    Promise.all(
-      films.filter(async (film) => {
-        const existingFilm = await db.get(
-          'SELECT * FROM films WHERE letterboxd_film_id = ?',
-          film.letterboxd_film_id
-        );
-        return !!existingFilm;
-      })
-    ),
-  ]);
+  const filmsToNotFetch = await Promise.all(
+    films.filter(async (film) => {
+      const existingFilm = await db.get(
+        'SELECT * FROM films WHERE letterboxd_film_id = ?',
+        film.letterboxd_film_id
+      );
+      console.log(
+        `LOG: filmsToFetch film: ${film.film_name} - ${existingFilm.film_name}`
+      );
+
+      if (existingFilm?.film_name) {
+        return true;
+      }
+    })
+  );
+  const filmsToNotFetchIds = filmsToNotFetch.map(
+    (film) => film.letterboxd_film_id
+  );
+
+  const filmsToFetch = films.filter(
+    (film) => !filmsToNotFetchIds.includes(film.letterboxd_film_id)
+  );
+
+  console.log(`LOG: Films to fetch: ${JSON.stringify(filmsToFetch)}`);
+  console.log(`LOG: Films to not fetch: ${JSON.stringify(filmsToNotFetch)}`);
 
   // Fetch parents guide for new films
   const filmsWithParentsGuide = await Promise.all(
@@ -256,8 +261,6 @@ export async function POST(req: any, res: NextApiResponse) {
     });
 
     console.log(`LOG: Scraped ${films.length} films`);
-
-    await browser.close();
     console.log('LOG: Films scraped: ', films);
 
     const filmsToProcess = films.slice(0, NUM_OF_FILMS_TO_FETCH);

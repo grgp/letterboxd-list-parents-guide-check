@@ -26,7 +26,7 @@ export function insertFilmQuery(film: FilmDbRecord): {
 } {
   const fields = Object.keys(film);
   const placeholders = fields.map(() => '?').join(', ');
-  const sql = `INSERT INTO films (${fields.join(
+  const sql = `INSERT OR IGNORE INTO films (${fields.join(
     ', '
   )}) VALUES (${placeholders})`;
   const params = Object.values(film);
